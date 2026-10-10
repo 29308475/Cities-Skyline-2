@@ -1,0 +1,170 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using CityStreetOverlay;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+static class StreetBuildChecks
+{
+    static void Check(bool ok,string message){if(!ok)throw new Exception(message);}
+    public static void Run()
+    {
+        var recognition=new StreetMap{DetailsVersion=1};
+        Add(recognition,new Point(0,0),new Point(40,0));
+        recognition.Types[0]=RoadType.Motorway;
+        recognition.Details[0].Highway="motorway_link";recognition.Details[0].DirectionKnown=true;recognition.Details[0].OneWay=true;
+        var choices=new List<RoadOption>{new RoadOption{Id="ramp",Name="One-Lane One-Way Road",Width=8,IsOneWay=true,DirectionKnown=true,Lanes=1,IsHighway=true,AutomaticEligible=true}};
+        var suggestions=RoadRecognition.Suggest(recognition,choices,RoadWidths.Manual(),new List<RoadSubgroup>(),new HashSet<string>());
+        Check(suggestions.Count==1&&suggestions[0].Profile.PrefabId=="ramp"&&suggestions[0].Name.Contains("geschätzt"),"Ramp proposal uses narrow one-way candidate and labels missing lane count");
+        Check(RoadRecognition.Suggest(recognition,choices,RoadWidths.Manual(),suggestions,new HashSet<string>()).Count==0,"Recognition preserves manual or accepted subgroup ownership");
+        Check(RoadRecognition.LabelLanes("Dreispurige Einbahnstraße")==3,"Catalogue lane-count hint");
+        Check(!RoadRecognition.StandardRoadLabel("Zweispurige Brücke mit Holzdach")&&!RoadRecognition.StandardRoadLabel("Einspurige Schotterstraße"),"Special road variants rejected");
+        choices.Add(new RoadOption{Id="other",Name="Other",Width=6,IsOneWay=true,DirectionKnown=true,Lanes=1,IsHighway=true,AutomaticEligible=true});
+        var defaults=RoadWidths.Manual();defaults[0].PrefabId="fallback";
+        Check(RoadRecognition.Suggest(recognition,choices,defaults,new List<RoadSubgroup>(),new HashSet<string>()).Count==0,"Ambiguous recognition cannot assign unchecked category fallback");
+        defaults[0].PrefabId="ramp";
+        Check(RoadRecognition.Suggest(recognition,choices,defaults,new List<RoadSubgroup>(),new HashSet<string>()).Single().Profile.PrefabId=="ramp","Existing category disambiguates only a matching candidate");
+        defaults[0].PrefabId="two-way";
+        var incompatible=new List<RoadOption>{new RoadOption{Id="two-way",Width=16,DirectionKnown=true,Lanes=2,IsHighway=true,AutomaticEligible=true}};
+        Check(RoadRecognition.Suggest(recognition,incompatible,defaults,new List<RoadSubgroup>(),new HashSet<string>()).Count==0,"One-way ramp never recognized as two-way fallback");
+        var cross=new StreetMap{DetailsVersion=1};
+        Add(cross,new Point(-40,0),new Point(40,0));
+        Add(cross,new Point(0,-40),new Point(0,40));
+        var crossing=StreetBuildPlan.Create(cross,RoadType.LocalRoad,1,null);
+        Check(crossing.Lines.Count==4,"X crossing without source node creates four arms");
+        Check(crossing.Lines.All(l=>l.Take(2).Any(p=>p.X==0&&p.Z==0)),"All four X arms share exact center");
+        var profiles=RoadWidths.Manual();profiles[2].PrefabId="standard";
+        var groupA=new RoadSubgroup{Id="a",Category=2,Profile=new RoadWidthProfile{PrefabId="wide",Meters=24},Roads=new List<string>{RoadExclusions.Key(cross.Roads[0])}};
+        var groupB=new RoadSubgroup{Id="b",Category=2,Profile=new RoadWidthProfile{PrefabId="narrow",Meters=8},Roads=new List<string>{RoadExclusions.Key(cross.Roads[1])}};
+        var groupedCross=RoadSubgroups.Plan(cross,new List<RoadSubgroup>{groupA,groupB},profiles,1,2,false,2000);
+        Check(groupedCross.Sum(b=>b.Plan.Lines.Count)==4&&groupedCross.SelectMany(b=>b.Plan.Lines).All(l=>l.Take(2).Any(p=>p.X==0&&p.Z==0)),"Different recognition profiles preserve exact X node");
+        groupB.Profile=groupA.Profile;
+        Check(RoadSubgroups.Plan(cross,new List<RoadSubgroup>{groupA,groupB},profiles,1,2,false,2000).Count==1,"Same road profile shares geometry batch across editing groups");
+        cross.Types[1]=RoadType.MainRoad;
+        Check(StreetBuildPlan.Create(cross,RoadType.LocalRoad,1,null).Lines.Count==2,"Other category preserves shared X node");
+        Check(StreetBuildPlan.Create(cross,RoadType.MainRoad,1,null).Lines.Count==2,"Second category uses same split");
+        Check(StreetBuildPlan.Create(cross,RoadType.LocalRoad,1,new HashSet<int>{0}).Lines.Count==2,"Split retains selected source ownership");
+        cross.Details[1].Bridge=true;
+        Check(StreetBuildPlan.Create(cross,RoadType.LocalRoad,1,null).Lines.Count==1,"Bridge crossing does not join ground road");
+        cross.Details[1].Bridge=false;cross.Details[1].Layer=1;
+        Check(StreetBuildPlan.Create(cross,RoadType.LocalRoad,1,null).Lines.Count==1,"Different layers never create X junction");
+        Check(cross.Roads.Count==2,"Intersection preparation leaves source selection keys unchanged");
+        var approach=new StreetMap{DetailsVersion=1};
+        Add(approach,new Point(0,0),new Point(8,0));
+        Add(approach,new Point(8,0),new Point(60,0));
+        Add(approach,new Point(8,-30),new Point(8,0));approach.Types[2]=RoadType.FootCyclePath;
+        foreach(var detail in approach.Details)detail.DirectionKnown=true;
+        var approachPlan=StreetBuildPlan.Create(approach,RoadType.LocalRoad,1,null);
+        Check(approachPlan.Lines.Count==1,"Unbuilt pedestrian approach does not reserve eight-meter road stub");
+        Check(StreetBuildPlan.Create(approach,RoadType.FootCyclePath,1,null).Lines.Count==1,"Pedestrian approach remains available to build");
+        approach.Types[2]=RoadType.MainRoad;
+        Check(StreetBuildPlan.Create(approach,RoadType.LocalRoad,1,null).Lines.Count==2,"Real omitted road junction remains reserved");
+        var joined=new StreetMap();
+        Add(joined,new Point(-30,0),new Point(0.001,0.001));
+        Add(joined,new Point(-0.001,-0.001),new Point(30,0));
+        var joinedPlan=StreetBuildPlan.Create(joined,RoadType.LocalRoad,1,null);
+        Check(joinedPlan.Lines.Count==1&&Math.Abs(CurvePlanner.Length(joinedPlan.Lines[0])-60)<0.01,"Canonical shared straight join stays one line without micro cuts");
+        var elements=new JArray();
+        foreach(var service in new[]{"driveway","parking_aisle","alley",null})
+            elements.Add(new JObject{["type"]="way",["id"]=elements.Count+1,["tags"]=new JObject{["highway"]="service",["service"]=service,["bridge"]="yes"},
+                ["geometry"]=new JArray(new JObject{["lat"]=0,["lon"]=0},new JObject{["lat"]=0,["lon"]=0.0001})});
+        var parsed=Geography.Parse(new JObject{["elements"]=elements}.ToString(),new Place{Name="Test"},1000);
+        Check(parsed.RemovedDriveways==2&&parsed.Roads.Count==2,"Only explicit driveways/parking aisles removed; short alleys retained");
+        Check(parsed.HasDetails&&parsed.Details.All(d=>d.Bridge),"Bridge details retained");
+        var copy=JsonConvert.DeserializeObject<StreetMap>(JsonConvert.SerializeObject(parsed));
+        Check(copy.HasDetails&&copy.Details[0].WayId==3,"Offline metadata round trip");
+        Check(MapMosaic.Compose(new[]{copy}).HasDetails,"Mosaic keeps metadata");
+        var ring=new StreetMap{DetailsVersion=1};
+        var points=Enumerable.Range(0,60).Select(i=>new Point(12*Math.Cos(i*Math.PI/30),12*Math.Sin(i*Math.PI/30))).ToArray();
+        for(int i=0;i<60;i++)Add(ring,points[i],points[(i+1)%60],true);
+        foreach(int i in new[]{0,20,40})Add(ring,points[i],new Point(points[i].X*4,points[i].Z*4));
+        var plan=StreetBuildPlan.Create(ring,RoadType.LocalRoad,1,null);
+        Check(plan.Circles.Count==1&&plan.Lines.Count==3,"Complete ring becomes native center with three approaches");
+        Check(plan.Lines.All(r=>Math.Abs(r[0].X)+Math.Abs(r[0].Z)<0.01),"Approaches meet center");
+        Check(ring.Roads.Count==63,"Preparation never modifies source");
+        var ringProfile=new RoadWidthProfile{PrefabId="ring",Name="Ring",Meters=8};
+        foreach(bool left in new[]{false,true})
+        {
+            var directed=RingRouting.Prepare(ring,1,left,out var ringIndices);
+            Check(ringIndices.Count==60,"Complete ring is routed independently of approaches");
+            double area=ringIndices.Sum(i=>directed.Roads[i][0].X*directed.Roads[i][1].Z-directed.Roads[i][1].X*directed.Roads[i][0].Z);
+            Check((area<0)==left,"Ring winding follows map traffic side");
+            var batches=RoadSubgroups.Plan(ring,new List<RoadSubgroup>(),RoadWidths.Manual(),1,null,true,2000,ringProfile,left);
+            Check(batches.Count(b=>b.IsRing)==1&&batches.Single(b=>b.IsRing).Profile==ringProfile,"Separate selectable ring road profile");
+            Check(batches.Where(b=>!b.IsRing).Sum(b=>b.Indices.Count)==3,"Approaches retain own profiles");
+            Check(batches.All(b=>b.Plan.Circles.Count==0),"Custom road ring does not also create native center island");
+        }
+        var roundtrip=JsonConvert.DeserializeObject<SavedTemplate>(JsonConvert.SerializeObject(new SavedTemplate{RoundaboutProfile=ringProfile}));
+        Check(roundtrip.RoundaboutProfile.PrefabId=="ring","Offline save retains ring road");
+        var mixed=JsonConvert.DeserializeObject<StreetMap>(JsonConvert.SerializeObject(ring));
+        mixed.Types[60]=RoadType.MainRoad;
+        Array.Reverse(mixed.Roads[7]);
+        var mixedBatches=RoadSubgroups.Plan(mixed,new List<RoadSubgroup>(),RoadWidths.Manual(),1,null,true,2000,ringProfile,false);
+        Check(mixedBatches.Single(b=>b.IsRing).Indices.Count==60,"Mixed-category approaches do not prevent ring road assignment");
+        Check(mixedBatches.Any(b=>!b.IsRing&&b.Category==(int)RoadType.MainRoad),"Foreign-category approach stays independent");
+        var arms=JsonConvert.DeserializeObject<StreetMap>(JsonConvert.SerializeObject(ring));
+        arms.Details[60].DirectionKnown=true;arms.Details[60].OneWay=true;
+        arms.Details[61].DirectionKnown=true;arms.Details[61].OneWay=true;
+        Array.Reverse(arms.Roads[61]);
+        var prepared=RingRouting.Prepare(arms,1,false,out var ringSet);
+        var armSet=RingRouting.Approaches(prepared,ringSet);
+        Check(armSet.SetEquals(new[]{60,61}),"Separate one-way entrance and exit recognized; two-way approach untouched");
+        var armProfile=new RoadWidthProfile{PrefabId="arm",Name="Arm",Meters=8};
+        var armBatches=RoadSubgroups.Plan(arms,new List<RoadSubgroup>(),RoadWidths.Manual(),1,null,true,2000,ringProfile,false,armProfile);
+        Check(armBatches.Single(b=>b.IsApproach).Profile==armProfile,"Approaches have independent road choice");
+        Check(armBatches.Single(b=>b.IsApproach).Indices.SetEquals(armSet),"Ring and unsplit two-way roads excluded from approach override");
+        Check(arms.Roads[61][0].X==ring.Roads[61][1].X,"Original incoming direction preserved");
+        var extended=JsonConvert.DeserializeObject<StreetMap>(JsonConvert.SerializeObject(arms));
+        Add(extended,extended.Roads[60][1],new Point(65,0));
+        Add(extended,new Point(65,0),new Point(85,0));
+        foreach(int i in new[]{63,64}){extended.Details[i].DirectionKnown=true;extended.Details[i].OneWay=true;}
+        Add(extended,new Point(65,-10),new Point(65,0));extended.Types[65]=RoadType.FootCyclePath;
+        Add(extended,new Point(85,0),new Point(120,0));
+        Add(extended,new Point(85,0),new Point(70,15));extended.Details[67].DirectionKnown=true;extended.Details[67].OneWay=true;
+        prepared=RingRouting.Prepare(extended,1,false,out ringSet);
+        armSet=RingRouting.Approaches(prepared,ringSet);
+        Check(armSet.Contains(63)&&armSet.Contains(64),"Narrow arm continues past footpath to merge");
+        Check(!armSet.Contains(65)&&!armSet.Contains(66)&&!armSet.Contains(67),"Footpath and roads beyond merge keep their profiles");
+        var legacy=new StreetMap{Roads=ring.Roads,Types=ring.Types};
+        Check(StreetBuildPlan.Create(legacy,RoadType.LocalRoad,1,null).Circles.Count==1,"Closed roundabout detected without legacy metadata");
+        Check(!legacy.HasDetails,"Inference never rewrites old offline template");
+        var two=new StreetMap{Roads=ring.Roads.Take(62).ToList(),Types=ring.Types.Take(62).ToList()};
+        Check(StreetBuildPlan.Create(two,RoadType.LocalRoad,1,null).Circles.Count==1,"Roundabout with two approaches supported");
+        var units=RoadSelection.Units(ring,new List<RoadSubgroup>(),new HashSet<string>());
+        var marked=new HashSet<int>();var hits=new HashSet<int>{1,2};
+        RoadSelection.Toggle(marked,units,hits,false);
+        Check(marked.Count==20,"Fine hits select complete junction-to-junction ring arc");
+        RoadSelection.Toggle(marked,units,hits,false);
+        Check(marked.Count==0,"Repeated frame toggles selected course off once");
+        RoadSelection.Toggle(marked,units,hits,true);
+        Check(marked.Count==0,"Explicit removal never adds selection");
+        var selection=new HashSet<int>(Enumerable.Range(0,63));selection.Remove(5);
+        Check(StreetBuildPlan.Create(ring,RoadType.LocalRoad,1,selection).Circles.Count==0,"Incomplete ring preserves short connections without native circle conversion");
+        selection=new HashSet<int>{60};
+        Check(StreetBuildPlan.Create(ring,RoadType.LocalRoad,1,selection).Lines.Count==1,"Selection excludes all other roads");
+        bool rejected=false;try{StreetBuildPlan.Create(ring,RoadType.LocalRoad,1,new HashSet<int>());}catch(InvalidOperationException){rejected=true;}
+        Check(rejected,"Empty selection cannot stamp everything");
+        var bridge=new StreetMap{DetailsVersion=1};
+        Add(bridge,new Point(-30,0),new Point(0,0));
+        Add(bridge,new Point(0,0),new Point(30,0));bridge.Details[1].Bridge=true;
+        Add(bridge,new Point(30,0),new Point(60,0));
+        plan=StreetBuildPlan.Create(bridge,RoadType.LocalRoad,1,null);
+        Check(plan.Lines.Count==3&&plan.Elevated.Count==2,"Bridge transitions stay at shared ramp endpoints");
+        var big=new StreetMap();for(int i=0;i<2001;i++)Add(big,new Point(i*40,0),new Point(i*40+20,0));
+        rejected=false;try{StreetBuildPlan.Create(big,RoadType.LocalRoad,1,null);}catch(InvalidOperationException){rejected=true;}
+        Check(rejected&&StreetBuildPlan.Create(big,RoadType.LocalRoad,1,new HashSet<int>{1,2}).Lines.Count==2,"Selection resolves limit without silently truncating builds");
+        var exclusions=new HashSet<string>{RoadExclusions.Key(big.Roads[1])};
+        var remaining=RoadExclusions.Apply(big,exclusions);
+        Check(remaining.Roads.Count==2000&&big.Roads.Count==2001,"Exclude only marked roads without mutating source");
+        Check(!remaining.Roads.Any(r=>RoadExclusions.Key(r)==RoadExclusions.Key(big.Roads[1])),"Excluded road never enters build map");
+        Check(StreetBuildPlan.Create(remaining,RoadType.LocalRoad,1,null).Lines.Count==2000,"Build all remaining roads, not marked roads");
+        var saved=new SavedTemplate{Map=big,ExcludedRoads=exclusions.ToList()};
+        var restored=JsonConvert.DeserializeObject<SavedTemplate>(JsonConvert.SerializeObject(saved));
+        Check(RoadExclusions.Apply(restored.Map,new HashSet<string>(restored.ExcludedRoads)).Roads.Count==2000,"Offline roundtrip keeps exclusions");
+        exclusions.Clear();Check(RoadExclusions.Apply(big,exclusions).Roads.Count==2001,"Restore excluded roads");
+        foreach(var r in big.Roads)exclusions.Add(RoadExclusions.Key(r));
+        Check(RoadExclusions.Apply(big,exclusions).Roads.Count==0,"Excluding everything must not restore everything");
+        Console.WriteLine("PASS: driveway filtering, metadata persistence, bridge transitions, native circle preparation, partial circles and selection limit");
+    }
+    static void Add(StreetMap m,Point a,Point b,bool circle=false){m.Roads.Add(new[]{a,b});m.Types.Add(RoadType.LocalRoad);m.Details.Add(new RoadDetails{Roundabout=circle});}
+}

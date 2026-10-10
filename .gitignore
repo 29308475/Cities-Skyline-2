@@ -1,0 +1,7 @@
+bin/
+obj/
+Tests/bin/
+Tests/obj/
+backups/
+dist/
+*.zip

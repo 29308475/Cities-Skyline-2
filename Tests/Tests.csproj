@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net6.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <None Update="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../Source/Geography.cs" Link="Geography.cs" />
+    <Compile Include="../Source/RoadTypes.cs" Link="RoadTypes.cs" />
+    <Compile Include="../Source/SavedTemplate.cs" Link="SavedTemplate.cs" />
+    <Compile Include="../Source/TemplateLibrary.cs" Link="TemplateLibrary.cs" />
+    <Compile Include="../Source/MapMosaic.cs" Link="MapMosaic.cs" />
+    <Compile Include="../Source/StampPlan.cs" Link="StampPlan.cs" />
+    <Compile Include="../Source/CurvePlanner.cs" Link="CurvePlanner.cs" />
+    <Compile Include="../Source/RoadSelection.cs" Link="RoadSelection.cs" />
+    <Compile Include="../Source/RoundaboutGeometry.cs" Link="RoundaboutGeometry.cs" />
+    <Compile Include="../Source/RoadIntersections.cs" Link="RoadIntersections.cs" />
+    <Compile Include="../Source/RingRouting.cs" Link="RingRouting.cs" />
+    <Compile Include="../Source/RoadRecognition.cs" Link="RoadRecognition.cs" />
+    <Compile Include="../Source/RoadGraph.cs" Link="RoadGraph.cs" />
+    <Compile Include="../Source/RoadSubgroups.cs" Link="RoadSubgroups.cs" />
+    <Compile Include="../Source/RoadExclusions.cs" Link="RoadExclusions.cs" />
+    <Compile Include="../Source/StreetBuildPlan.cs" Link="StreetBuildPlan.cs" />
+    <Compile Include="../Source/RoadWidths.cs" Link="RoadWidths.cs" />
+    <Compile Include="../Source/RoadDefaults.cs" Link="RoadDefaults.cs" />
+    <Compile Include="../Source/HighwayJunctionGeometry.cs" Link="HighwayJunctionGeometry.cs" />
+    <Compile Include="../Source/HighwayAlignment.cs" Link="HighwayAlignment.cs" />
+    <Compile Include="../Source/CarriagewaySides.cs" Link="CarriagewaySides.cs" />
+    <Compile Include="../Source/LaneAlignment.cs" Link="LaneAlignment.cs" />
+    <Compile Include="../Source/RampConnections.cs" Link="RampConnections.cs" />
+    <Compile Include="../Source/IsolatedRoads.cs" Link="IsolatedRoads.cs" />
+    <Compile Include="../Source/MapService.cs" Link="MapService.cs" />
+    <Reference Include="Newtonsoft.Json"><HintPath>D:/SteamLibrary/steamapps/common/Cities Skylines II/Cities2_Data/Managed/Newtonsoft.Json.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

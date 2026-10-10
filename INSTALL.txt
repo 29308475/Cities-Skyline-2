@@ -1,0 +1,207 @@
+## 0.19.7: Gemeinsamer Knoten mit seitlich passenden Fahrbahnen
+
+Autobahnanschlüsse unterscheiden jetzt zwischen dem gemeinsamen logischen Verbindungsknoten und den physischen Mittellinien der einzelnen Straßen. Bei eindeutigen 3+1/4-Anschlüssen bleiben die drei durchgehenden Fahrspuren bündig; die Rampenmittellinie trifft die zusätzliche äußere Fahrspur. Auch reine Breitenwechsel behalten die Spurflucht. Die native Spielpipeline unterstützt abweichende horizontale Kurvenendpunkte für Straßen ohne StrictNodes; die Mod nutzt diese Möglichkeit statt alle Straßenmittellinien durch die Knotenmitte zu führen.
+
+Die Fähigkeit wird im Straßenkatalog aus NetGeometryData gelesen und beim Profil-Refresh übernommen. Ohne passende Spuranzahl, bekannte Spurdaten, eindeutige Richtung und gemeinsame Höhenebene wird kein solcher Versatz geraten. Topologische Endpunkte bleiben identisch; Straßenring- und Kreisverkehrsarme sind ausgenommen. Vorschau, Hover und Auswahl zeichnen die physischen Kurven. Bestehende Straßen werden nicht verändert.
+
+Validierung: Mod-Build und vollständige Tests bestanden. Neue Tests decken Links-/Rechtsverkehr, Ein-/Ausfahrt, drei Maßstäbe, drei Rotationen, Teilvorschau, gemeinsame Knoten, bündige Fahrspuren und ungeeignete Prefabs ab. Die gespeicherten 43 Baukurse wurden mit der 1/3/4-Spur-Zuordnung als Regression geprüft; alle vier Rampen erhalten den äußeren Anschluss. Das ist keine Ingame-Bestätigung der nativen Fahrspurverbindungen. Das erweiterte last-connections.json enthält nun Prefab-IDs, physische Kurvenendpunkte, erzeugte Kurven und native Fahrspurverbindungen. Nach Neustart frisch bauen und das Ergebnis prüfen.
+
+## 0.19.6: Gemeinsame Anschlussrichtung der Autobahn
+
+Die beiden weiterführenden Autobahnkurven werden an eindeutigen Anschlüssen gemeinsam ausgerichtet, auch über Straßentyp-/Untergruppengrenzen hinweg. Die Rampenberechnung verwendet anschließend diese gemeinsame Richtung. Knotenpositionen und Fahrbahnversatz bleiben erhalten. Nur bekannte gerichtete Hauptfahrbahnen auf gleicher Höhenebene werden berücksichtigt; mehrdeutige Abzweige oder Richtungsknicke über 25 Grad werden nicht geglättet. Kontrollpunktverschiebungen sind auf 4 m begrenzt. Dies ist eine lokale gemeinsame Kurvenplanung, kein neuer nativer Spielknotentyp und noch keine explizite Zuweisung von Fahrspurverbindungen.
+
+Validierung: vollständige Geometrie-/Datentests bestanden. Neues Regressionstestmaterial aus dem Bauprotokoll vom 04.10.2026 mit 43 Kursen: alle vier Rampenanschlüsse haben durchgehende Hauptfahrbahntangenten, unveränderte Endpunkte und begrenzte Kurvenabweichung. Native Darstellung und Fahrspurverbindungen sind noch im Spiel zu prüfen. Spiel neu starten und Anschluss frisch bauen; bestehende Straßen werden nicht verändert.
+
+## 0.19.5: Tatsächliche Fahrspurpositionen
+
+Die Straßeninitialisierung wird für das Auslesen der Fahrspurpositionen nachvollzogen: Standard-Komposition aus NetGeometrySection über die nativen NetCompositionHelpers. Der zuvor verwendete optionale DefaultNetLane-Puffer fehlt bei normalen Straßen-Prefabs; das Laufzeitprotokoll enthielt deshalb leere Spurpositionen. Die bestehenden Berechnungen für Autobahnverbreiterungen und lokale Rampentangenten erhalten nun die tatsächliche Spuraufteilung, sofern eindeutig verfügbar. Original-Kartendaten und vorhandene Straßen bleiben unverändert.
+
+Validierung: Mod-Build und vollständige bestehende Geometrie-/Datentests bestanden. Die native Kompositionsauswertung ist gegen die installierte Spiel-API kompiliert und mit deren Initialisierungscode abgeglichen; tatsächliche Spurwerte und Anschlüsse müssen nach Spielneustart an einem frischen Stempel geprüft werden. Kein Nachweis einer vollständig behobenen Rampenverbindung durch diese Tests. Diagnostics/highway-lanes.json protokolliert die ausgelesenen Werte.
+
+## Version 0.19.4: Rampen seitlich an die Fahrbahn heranführen
+
+Einbahn-Autobahnrampen erhalten eigene Baugruppen. An bekannten gemeinsamen Knoten mit motorway/trunk wird bei sehr flachem Anschluss ausschließlich der anschlussnahe Bézier-Kontrollpunkt der Rampe angepasst. Der Zielwinkel berücksichtigt äußere Fahrspurposition bzw. Fahrbahnbreite und Rampenbreite. Autobahnkurven, gemeinsame Endpunkte und entfernter Rampenkontrollpunkt bleiben erhalten. Kurze notwendige Anschlüsse unter 16 Weltmetern werden nicht zwanghaft gebogen. Kreisverkehr-Anschlussgruppen und verschiedene Höhenregime sind ausgenommen. Die native Lane-Zuordnung entscheidet weiterhin das Spiel; keine direkte Lane-Verknüpfung wird erzwungen.
+
+## Version 0.19.3: Fahrspuren statt Gesamtbreite ausrichten
+
+Der Katalog liest DefaultNetLane-Positionen eindeutig gerichteter Spielstraßen aus. Normale Fahrspuren werden von virtuellen, Master-, Park-, Fahrrad- und sekundären Spuren getrennt. Die Autobahnausrichtung gleicht gemeinsame Fahrspurmitten von der Mittelstreifenseite ab und legt zusätzliche Spuren außen an. Das funktioniert auch bei gleicher Gesamtbreite. Bei bekannten inkompatiblen Spurabständen wird kein exakter Versatz erfunden; bei fehlenden Spurdaten bleibt der bisherige Breiten-Rückfall. Spurpositionen werden in gespeicherten Profilen erhalten, bei Katalogänderung aktualisiert und Bauplan-Caches verworfen. Diagnostics/highway-lanes.json enthält die tatsächlich ausgelesenen Autobahndaten.
+
+Bestehende Straßen werden nicht verändert. Die native Anschlussgeometrie ist weiterhin ingame zu bestätigen; die mathematischen Tests ersetzen keine Verkehrsprüfung.
+
+## Version 0.19.2: Außenseite anhand benachbarter Fahrbahn
+
+Breitere Autobahnstücke werden von einer eindeutig nahen parallelen Hauptfahrbahn weg versetzt, unabhängig von der Quelllinienrichtung. Suche beschränkt auf gleiche Höhenregime und 4–80 Weltmeter Abstand, ohne Rampen. Bei mehrdeutigen Nachbarn auf beiden Seiten kein Versatz; ohne Nachbar bleibt die Verkehrsseitenregel. Der Rampenversatz läuft über vorhandene Zwischenpunkte bis maximal 64 Weltmeter aus, endet an Verzweigungen und lässt den entfernten Anschluss unverändert. Bestehende Straßen werden nicht verändert.
+
+## Version 0.19.1: Kurze isolierte Reststücke
+
+Vor dem Stempeln werden zusammenhängende, vollständig isolierte Straßenstücke unter insgesamt 16 Weltmetern ausgelassen. Betrachtet werden alle Kategorien nach Schnittpunktaufteilung, nicht einzelne Quellsegmente. Angeschlossene kurze Zufahrten, Ringe, Brücken und Tunnel bleiben erhalten. Erkennt das native Andocken einen Bestandsanschluss, bleibt die zusammenhängende Baugruppe erhalten. Die Vorlage bleibt editierbar und unverändert; ausgelassene Bauabschnitte werden im Ergebnis gezählt. Diagnose enthält jetzt Kurvenkontrollpunkte.
+
+## Version 0.19.0: Autobahnverbreiterung nach außen
+
+Breitere Untergruppen auf eindeutig gerichteten motorway/trunk-Hauptfahrbahnen werden gegenüber der Autobahn-Kategorienbreite um die halbe zusätzliche Spielstraßenbreite nach außen versetzt. Rechts-/Linksverkehr und Maßstab werden berücksichtigt. Angeschlossene Rampen und Nachbarabschnitte übernehmen denselben versetzten Knoten; entfernte Rampenpunkte bleiben erhalten. Vorschau, Bauplanung und Mausauswahl verwenden die korrigierte Geometrie. Quellkoordinaten und gespeicherte Zuordnungsschlüssel bleiben unverändert.
+
+Die Ausrichtung setzt voraus, dass die Kategorienbreite die Bezugsfahrbahn beschreibt. Keine automatische Verschiebung von Zweirichtungsstraßen, Rampen als Hauptfahrbahn oder Knoten mit unterschiedlichen Höhenregimen. Bereits gebaute Straßen werden nicht verändert. Native Fahrbahnübergänge ingame prüfen.
+
+## Version 0.18.9: Keine ungeprüften Erkennungszuordnungen
+
+Straßenerkennung legt keine Untergruppe mehr mit einer ungeprüften Kategorienstraße an, wenn kein passender Kandidat existiert. Fahrtrichtung, Spurzahl und Autobahnregeln müssen passen. Mehrdeutige Treffer werden nur durch eine bereits passende Kategorienauswahl aufgelöst. Nicht erkannte Abschnitte behalten ihre bisherige Kategorienzuordnung; diese bleibt manuell zu prüfen. Bestehende Untergruppen werden nicht rückwirkend geändert. Diese Korrektur ist kein Nachweis einer Behebung der nativen Anschlussverformungen.
+
+## Version 0.18.8: Deutscher Autobahn-Standard
+
+Die zulässigen Standardbezeichnungen umfassen jetzt Schnellstraße und Einbahnschnellstraße, insbesondere Dreispurige Einbahnschnellstraße. Zuvor konnte die deutsche Bezeichnung von der automatischen Standardauswahl ausgeschlossen werden. Native Autobahnregeln, Fahrtrichtung und Spurzahl bleiben zusätzliche Bedingungen. Gespeicherte Zuordnungen und manuelle Breiten bleiben erhalten.
+
+## Version 0.18.7: Kreisverkehr-Anschlussstraßen haben Vorrang
+
+Erkannte getrennte Ein-/Ausfahrten verwenden die eigene Kreisverkehr-Anschlussstraßenauswahl auch bei Untergruppen/Erkennungsvorschlägen. Zuvor konnten Untergruppen die schmale Einbahnstraße durch eine zweispurige Kategorienstraße ersetzen. Gilt bis zur nächsten Straßenverzweigung/Zusammenführung; normale Zweirichtungszufahrten bleiben unverändert. Bestehende manuelle Anschlussstraßenauswahl bleibt erhalten. Bereits gebaute Straßen werden nicht verändert.
+
+## Version 0.18.6: Straßenauswahl direkt in Unterkategorien
+
+Die aufgeklappte Unterkategorie enthält eine Straßenauswahl mit aktuellem Namen, Suche, Kategorienfilter und Alle Straßen und Wege. Auswahl übernimmt sofort ohne zusätzlichen Bestätigungsbutton; Hauptkategorie bleibt unverändert. Der seitliche Editor wird für Straßenänderungen nicht mehr benötigt und damit nicht durch den schmalen Dock abgeschnitten.
+
+## Version 0.18.5: Standards für Straßenkategorien
+
+Nicht zugewiesene Kategorien erhalten passende verfügbare Standardstraßen: dreispurige Einbahn-Autobahn, zweispurige Hauptstraße nahe 16 m, schmalste geeignete zweispurige Wohnstraße und Asphaltweg. Bestehende Auswahl, Untergruppen und ausdrücklich manuelle Breiten bleiben erhalten. Fehlt ein geeigneter Kandidat, bleibt die Kategorie unverändert. Kreisverkehr und Zufahrten behalten ihre separate Auswahl.
+
+0.18.4: Linksklick auf Overlay öffnet passende Unterkategorie in der Detailansicht. Normales Spielwerkzeug nutzen, Bereiche markieren bleibt separat. Spiel neu starten.
+
+0.18.3: Deutsche Straßenklassen und weiße Hover-Hervorhebung. Spiel neu starten.
+
+0.18.2: Strengere Erkennung und gemeinsame Bauplanung identischer Straßenprofile. Alte falsche Untergruppen aufheben/ändern, dann neu erkennen. Spiel neu starten.
+
+0.18.1: Kompakter aufklappbarer Unterkategorienbaum. Spiel neu starten.
+
+0.18.0: Kleine Ansicht > Weitere Einstellungen > Straßen erkennen. Frisch geladene Vorschau verwenden, Vorschläge prüfen und übernehmen; Untergruppen bleiben bearbeitbar. Spiel neu starten.
+
+0.17.1: Deckkraftregler und Bauen-Button auf voller Kartenbreite. Spiel neu starten.
+
+0.17.0: Kompakte Karten; Markierungsaktionen und Weitere Einstellungen aufklappbar; Kategorien überlagern den Footer nicht. Spiel neu starten.
+
+0.16.2: Schmale Kreisverkehr-Anschlussarme werden über Fußweganschlüsse hinweg bis zur Zusammenführung verfolgt. Spiel neu starten und neu stempeln.
+
+0.16.1: Kreisverkehr aufklappen > Ein-/Ausfahrten auswählen. Schmale Einbahnstraße für getrennte Anschlussarme empfohlen. Spiel neu starten; neu stempeln.
+
+0.16.0: Eigene Kreisverkehr-Straßenauswahl in großer und kleiner Ansicht. Einbahnstraße empfohlen; Drehsinn folgt Kartenverkehr. Spiel neu starten, Straße prüfen und neu stempeln.
+
+0.15.3: Ungebaute Fußwege erzeugen keine vorsorglichen kurzen Fahrbahnabschnitte. Spiel neu starten; Kreuzung auf freier Fläche erneut stempeln.
+
+0.15.1: Gemeinsame X-Knoten aus geometrischen Schnittpunkten. Spiel neu starten und auf freier Fläche testen.
+
+0.15.0: Zusammenhängende Markierung; erneuter linker Rahmen wählt ab. Geometrische Kreisverkehrerkennung ergänzt. Spiel neu starten.
+
+0.14.1: Runde Overlay-Übergänge; rechter Rahmen wählt ab. Spiel vollständig neu starten.
+
+0.14.0: Kurvenanpassung korrigiert; grobe Kartenbögen werden als native Kurven geplant. Spiel vollständig neu starten. Tatsächlichen Bau und breite Anschlüsse ingame prüfen.
+
+0.13.2: Mausrad-Fix durch mausdurchlässige Markierungsanzeige und native Auswahl-Erfassung. Spiel vollständig neu starten.
+
+0.13.1: Zoom und WASD bleiben beim Markieren auf der Karte frei. Spiel neu starten.
+
+0.13.0: Zusammenhängende Geraden/Kurven im Overlay und vereinheitlichte Anschlussknoten. Bereiche markieren > Als Untergruppe zuordnen: eigene Kategorie und Spielstraße für z.B. Auf-/Abfahrten. Untergruppen werden mitgespeichert. Anschlüsse im Spiel noch prüfen; Spiel neu starten.
+
+0.12.0: Maus markiert Bereiche zum ENTFERNEN. Markierte entfernen blendet sie aus und schließt sie vom Bau aus. Verbleibende Straßen bauen baut den Rest je Kategorie. Entfernte wiederherstellen macht Ausschlüsse rückgängig; Speichern bewahrt sie. Spiel neu starten.
+
+0.11.1: 16 m ist nur die Zielgröße. Kürzere unvermeidbare Anschlüsse sind erlaubt und stoppen den Auftrag nicht mehr. Dies ersetzt die strengere Regel aus 0.11.0. Spiel neu starten.
+
+0.11.0: Geraden zusammenfassen, native Bezier-Kurven und mindestens 16 m pro Bauabschnitt. Maßstab bleibt unverändert. Unvermeidbare kurze Anschlüsse stoppen den Auftrag mit Hinweis. Spiel neu starten.
+
+NEU: Kartenauswahl per Klick/Rahmen in der kleinen Ansicht; danach je Kategorie Auswahl bauen. Alt entfernt, Rechtsklick beendet. Offline-Vorlagen lassen sich einzeln mit Bestätigung löschen. Neue OSM-Vorschauen enthalten Zufahrtsfilter, Brücken- und Kreisverkehrmerkmale; alte Vorlagen bleiben unverändert. Details und Grenzen siehe README.md.
+
+City Street Overlay 0.14.0 - LOKALER PROTOTYP
+
+STRASSENSTEMPEL: In der kleinen Ansicht je Kategorie eine Spielstraße
+auswählen, Vorlage und Kategorie einblenden, dann "Ausgewählte Straße
+platzieren" klicken. Baut die gesamte Kategorie der aktuellen Sammlung
+mit gemeinsamer Position, Drehung und Maßstab. Während der Bauprüfung
+kann über "Bau abbrechen" abgebrochen werden. Eine Übergabe ans Spiel
+ist danach kein noch abbrechbarer Auftrag mehr.
+Erste Bauversion: bodengeführte Straßen, keine automatische Brücken- oder
+Tunnelplanung. Native Platzierungsfehler verhindern die Übergabe.
+Maximal 2.000 geplante Bauabschnitte. Kurze Kurvenabschnitte werden mit maximal 25 cm Abweichung zusammengefasst; unvermeidbare kurze Anschlüsse prüft das Spiel.
+Bestehende kompatible Straßenknoten werden im Umkreis von 2 m angeschlossen;
+Kreuzungen mitten auf bestehenden Straßen werden nicht eigens aufgeteilt.
+Echter Straßenbau noch nicht im laufenden Spiel geprüft: zuerst einen
+separaten Spielstand verwenden. Build und automatisierte Prüfungen bestanden.
+
+Minimieren neben Schließen zeigt vier Detailfenster am LINKEN Rand.
+Je Kategorie: Sichtbarkeit, Straßenauswahl und eigene Deckkraft.
+Die Gesamtdeckkraft wird mit der Kategorie-Deckkraft multipliziert.
+Großes Fenster stellt die Hauptansicht wieder her. Werte bleiben erhalten
+und werden beim Speichern mitgesichert; alte Vorlagen starten je Kategorie
+mit 100 Prozent zusätzlich zur bisherigen Gesamtdeckkraft.
+
+Interaktive Vorschau: Mit linker Maustaste ziehen. Nach dem Loslassen
+wird der neue geografische Ausschnitt geladen und zur Sammlung ergänzt.
+Vorhandene Ausschnitte bleiben auf der Spielkarte erhalten. Drehung,
+Maßstab und Platzierung gelten gemeinsam; die Vorschau dreht sich mit.
+Speichern sichert die ganze Sammlung als neue Stadt-Version.
+Grenzen: 24 Ausschnitte bzw. 320.000 Straßenabschnitte pro Sammlung.
+Neue Sammlung laden beginnt neu; Ziehen erweitert die bestehende.
+
+Speichern legt eine neue Version unter dem Stadtnamen an, ohne vorherige
+Stände zu überschreiben. Offline laden öffnet eine Auswahl mit Stadt,
+Version, Datum und Vorschau. Die alte Einzelvorlage bleibt als Version 1
+verfügbar (ohne gespeichertes Vorschaubild). Neue Vorlagen liegen im
+Unterordner Templates des unten genannten ModsData-Verzeichnisses.
+
+Neues Fenster im Browser geprüft; Prüfung im laufenden Spiel noch offen.
+
+Installation:
+1. Cities: Skylines II schließen.
+2. Den Ordner CityStreetOverlay aus diesem ZIP nach
+   %USERPROFILE%\AppData\LocalLow\Colossal Order\Cities Skylines II\Mods\
+   kopieren. CityStreetOverlay.dll, CityStreetOverlay.mjs UND
+   CityStreetOverlay.css müssen nebeneinander im Ordner liegen.
+3. Spiel neu starten, Stadt laden, Karten-Symbol in der Mod-Leiste oben
+   links anklicken (Hinweis: Straßen-Vorlage · City Street Overlay).
+4. Stadt suchen, Treffer wählen, Ausschnitt laden, Vorlage platzieren.
+5. Unter "Straßentypen & Breiten" die gewünschten Typen ein-/ausblenden:
+   Orange: Autobahnen; Gelb: Hauptstraßen;
+   Türkis: Wohn-/Nebenstraßen; Grün: Fuß-/Radwege.
+6. Im selben Bereich je Kategorie eine Straße
+   auswählen. Die Mod übernimmt deren Standardbreite in Metern.
+   Die Liste enthält auch geladene Mod-Straßen und lässt sich durchsuchen.
+7. "Reale Abstände 1:1" erhält die realen Abstände. Ein anderer Maßstab
+   verändert die Abstände, aber nicht die gewählte Spielstraßenbreite.
+
+Bis zur Straßenauswahl bleibt die manuelle Breite aktiv (anfangs 3 m).
+Für getrennte Autobahnlinien eine Straße für eine Fahrtrichtung wählen.
+Straßenzuordnungen werden offline mitgespeichert. Fehlt eine gewählte
+Mod-Straße später, bleibt ihre gespeicherte Breite mit Hinweis erhalten.
+
+Die Filter gelten für Vorschau und Spielkarte und werden beim Speichern
+der Offline-Vorlage mitgespeichert. Neue Vorschauen enthalten automatisch
+die Typdaten. Ältere gespeicherte Vorlagen bleiben einfarbig kompatibel.
+
+Die Mod zeigt Vorlagenlinien und kann über den expliziten Stempelknopf
+echte Straßen bauen. Reines Laden oder Anzeigen baut weiterhin nichts.
+Die Vorlage startet am Weltursprung; Position über die Regler anpassen.
+Vor einem Stadtwechsel die Vorlage ausblenden.
+
+Das Fenster startet geschlossen. Erneut auf das Symbol oder auf × klicken,
+um es zu schließen. Die Straßenvorlage bleibt dabei sichtbar. F8 entfällt.
+
+Fenster an der gesamten Titelleiste verschieben (außer am Schließen-Knopf).
+Feste Fenstergröße mit automatischer Begrenzung auf den Bildschirm.
+Neues Straßennetz-Symbol in der Mod-Leiste und grafische Accordion-Pfeile.
+Rechts Bereiche durch Klick auf die Überschrift auf-/zuklappen.
+Die Vorschau bleibt links sichtbar, die Hauptaktionen bleiben unten.
+Über dem Fenster blockiert die Mod Kamera- und Werkzeug-Eingaben:
+kein Durchklicken und kein Kartenzoom beim Scrollen. Außerhalb und nach
+dem Schließen werden die Sperren freigegeben. Bitte dies im Spiel prüfen.
+
+Stand: Build, 97 Daten-/Filter-/Breitenprüfungen und UI-Browserprüfung
+bestanden. Das neue Fenster und die Eingabesperren benötigen noch einen
+Test im laufenden Spiel. Kreuzungen und Aufweitungen bleiben schematisch.
+
+Kartendaten: © OpenStreetMap-Mitwirkende, ODbL
+https://www.openstreetmap.org/copyright
+Suchdienstregeln: https://operations.osmfoundation.org/policies/nominatim/
+Keine Autovervollständigung, Cache, mindestens 1,1 s zwischen Anfragen.
+Nur lokaler Prototyp: vor öffentlicher Verteilung den Suchanbieter für
+die Gesamtlast aller Nutzer auslegen.
+
+Anbieter und Offline-Vorlage:
+%USERPROFILE%\AppData\LocalLow\Colossal Order\Cities Skylines II\ModsData\CityStreetOverlay
+services.json enthält austauschbare HTTPS-Endpunkte.
+
+Deinstallation: Nur den oben kopierten Mod-Ordner CityStreetOverlay entfernen.

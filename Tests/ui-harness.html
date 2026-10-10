@@ -1,0 +1,69 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><title>City Street Overlay UI test harness</title>
+<link rel="stylesheet" href="/CityStreetOverlay.css">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif;background:#516450}button,input{font:inherit}#world{position:absolute;inset:0;background:linear-gradient(130deg,#294d45,#5f795b 65%,#253e4b);color:#ddd}#world>span{position:absolute;bottom:22px;left:26px;opacity:.55}#toolbar{position:absolute;top:10px;left:10px}#ui{position:absolute;inset:0;pointer-events:none}.mock-slider{accent-color:#53bcda}.mock-scroll{overflow-y:auto;overflow-x:hidden}.mock-scroll::-webkit-scrollbar{width:7px}.mock-scroll::-webkit-scrollbar-thumb{background:#527c90;border-radius:5px}</style>
+<div id="world"><span>Browser-Prüfung mit simulierten Spielbindungen</span></div><div id="toolbar"></div><div id="ui"></div>
+<script src="/react.js"></script><script src="/react-dom.js"></script>
+<script>
+const h=React.createElement;
+window.commands=[];window.barrier=false;window.worldClicks=0;window.worldWheels=0;
+document.getElementById('world').addEventListener('click',()=>window.worldClicks++);
+document.addEventListener('wheel',()=>window.worldWheels++);
+let state={busy:false,status:'Vorschau bereit. Mit „Auf Karte anzeigen“ platzieren.',query:'München',sizeKm:2,eastKm:0,northKm:0,
+ selected:'München, Bayern, Deutschland',places:[],canSearch:true,canRestore:true,map:{name:'München, Bayern, Deutschland',sizeMeters:2000,typed:true},
+ visible:true,locked:false,filter:15,offsetX:120,offsetZ:-60,rotation:0,scale:1,opacity:.7,catalogStatus:'28 Spielstraßen und Wege verfügbar.',
+ profiles:[{name:'Dreispurige Autobahn',width:16,assigned:true,available:true},{name:'Vierstreifige Straße',width:32,assigned:true,available:true},
+ {name:'Zweispurige Straße',width:16,assigned:true,available:true},{name:'Fußgängerweg',width:4,assigned:true,available:true}]};
+const catalog=Array.from({length:28},(_,i)=>({id:'road-'+i,name:['Dreispurige Autobahn','Vierstreifige Straße','Zweispurige Straße','Fußgängerweg'][i%4]+' '+(i+1),width:[16,32,16,4][i%4],isHighway:i%4===0,isPath:i%4===3}));
+let roads='';for(let i=0;i<12;i++){roads+=`<path d="M ${35+i*38} 15 L ${65+i*34} 485 M 20 ${30+i*39} L 492 ${50+i*35}" stroke="#46ebff" stroke-width="3"/>`;}
+roads+='<path d="M0 450 C100 390 200 220 510 80 M0 438 C100 378 200 208 510 68" stroke="#ff8c37" stroke-width="6"/><path d="M0 250 L510 340 M150 0 L270 510" stroke="#ffdc41" stroke-width="7"/><path d="M20 180 C100 30 350 180 490 30" stroke="#6eeb73" stroke-width="3"/>';
+const preview='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" fill="#0f1923"/><g fill="none">'+roads+'</g></svg>');
+const values={windowOpen:true,state:JSON.stringify(state),preview,catalog:JSON.stringify(catalog)},listeners={};
+values.library=JSON.stringify([1,2].map(v=>({Id:'fixture-'+v,City:'München',Location:'München, Bayern',Version:v,SavedUtc:'2026-10-02T12:00:00Z',Preview:preview})).reverse());
+function emit(key,value){values[key]=value;(listeners[key]||[]).forEach(fn=>fn(value));}
+window.fixture=(updates)=>{state={...state,...updates};emit('state',JSON.stringify(state));};
+window['cs2/api']={bindValue:(group,key,fallback)=>({key,fallback}),useValue:binding=>{const[v,set]=React.useState(values[binding.key]??binding.fallback);React.useEffect(()=>{(listeners[binding.key]||=[]).push(set);return()=>{listeners[binding.key]=listeners[binding.key].filter(x=>x!==set);};},[binding.key]);return v;},
+ trigger:(group,key,value)=>{if(key==='pointerOverPanel'){window.barrier=value;commands.push({action:'pointer',value});return;}if(key==='toggleWindow'){emit('windowOpen',!values.windowOpen);return;}const cmd=JSON.parse(value);commands.push(cmd);
+ if(cmd.action==='close')emit('windowOpen',false);
+ if(cmd.action==='restore')state.libraryOpen=true;
+ if(cmd.action==='closeLibrary')state.libraryOpen=false;
+ if(cmd.action==='loadTemplate'){state.libraryOpen=false;state.visible=false;state.locked=true;}
+ if(cmd.action==='stampRoad'){state.stampBusy=true;state.stampStatus='Bauprüfung läuft';}
+ if(cmd.action==='cancelStamp'){state.stampBusy=false;state.stampStatus='Bau abgebrochen.';}
+ if(cmd.action==='visible')state.visible=cmd.value;if(cmd.action==='locked')state.locked=cmd.value;
+ if(cmd.action==='filter')state.filter=cmd.value?state.filter|(1<<cmd.type):state.filter&~(1<<cmd.type);
+ if(cmd.action==='categoryOpacity')state.profiles[cmd.type]={...state.profiles[cmd.type],opacity:cmd.value};
+ if(cmd.action==='placement'&&(!state.locked||cmd.field==='opacity'))state[cmd.field]=cmd.value;
+ if(cmd.action==='area')state[cmd.field]=cmd.value;
+ if(cmd.action==='search'){state.query=cmd.query;state.places=['Berlin, Deutschland','Bern, Schweiz'];}
+ if(cmd.action==='selectPlace')state.selected=state.places[cmd.index];
+ if(cmd.action==='selectRoad'){const o=catalog.find(o=>o.id===cmd.id);state.profiles[cmd.type]={...state.profiles[cmd.type],name:o.name,width:o.width,assigned:true,available:true};}
+ if(cmd.action==='subgroupRoad'){const o=catalog.find(o=>o.id===cmd.id);state.subgroups=state.subgroups.map(g=>g.id===cmd.group?{...g,roadName:o.name,prefabId:o.id,width:o.width,available:true}:g);}
+ if(cmd.action==='manualWidth')state.profiles[cmd.type]={name:null,width:cmd.value,assigned:false,available:false};
+ emit('state',JSON.stringify(state));}};
+window['cs2/ui']={
+ Button:({onSelect,children,src,selected,variant,focusKey,...props})=>h('button',{...props,type:'button',onClick:onSelect},children||'▧'),
+ Tooltip:({children,tooltip})=>h('span',{title:tooltip},children),
+ Panel:({children,theme,header,onClose,className,...props})=>h('div',{...props,className:theme.panel+' '+(className||'')},h('div',{className:theme.header},header),h('div',{className:theme.content},children)),
+ Scrollable:({children,className,style})=>{
+  const ref=React.useRef(null);
+  React.useEffect(()=>{
+   const el=ref.current;
+   const wheel=e=>{e.preventDefault();el.scrollTop+=e.deltaY;el.scrollLeft+=e.deltaX;};
+   el.addEventListener('wheel',wheel,{passive:false});
+   return()=>el.removeEventListener('wheel',wheel);
+  },[]);
+  return h('div',{ref,className:'mock-scroll '+className,style},children);
+ }
+};
+const modules={
+ 'game-ui/common/input/text/text-input.tsx':{TextInput:props=>h('input',{...props,type:'text'})},
+ 'game-ui/common/input/slider/slider.tsx':{Slider:({value,start,end,onChange,disabled,className,valueTransformer})=>h('input',{type:'range',min:start,max:end,step:'any',value,disabled,className:'mock-slider '+className,onChange:e=>onChange(Number(e.target.value))})}
+};
+window.failModule=false;
+window['cs2/modding']={getModule:(path,name)=>{
+ if(window.failModule)throw new Error('Injected missing game module');
+ if(!modules[path]||!modules[path][name])throw new Error('Unknown game module: '+path+'@'+name);
+ return modules[path][name];
+}};
+</script>
+<script type="module">import register,{clampWindow} from '/CityStreetOverlay.mjs';window.clampWindow=clampWindow;register({append:(where,Component)=>ReactDOM.render(React.createElement(Component),document.getElementById(where==='Game'?'ui':'toolbar'))});</script></html>
